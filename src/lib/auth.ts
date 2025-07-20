@@ -13,7 +13,7 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async session({ session, user }) {
-      if (session.user) {
+      if (session.user && user) {
         session.user.id = user.id
         
         // ユーザーのサブスクリプション情報を取得
@@ -21,7 +21,7 @@ export const authOptions: NextAuthOptions = {
           where: { userId: user.id }
         })
         
-        session.user.subscription = subscription
+        session.user.subscription = subscription || undefined
       }
       return session
     },
