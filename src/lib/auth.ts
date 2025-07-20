@@ -25,28 +25,33 @@ export const authOptions: NextAuthOptions = {
       }
       return session
     },
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       // 新規ユーザーの場合、無料プランのサブスクリプションを作成
       if (account?.provider === "google" && user.email) {
-        const existingUser = await prisma.user.findUnique({
-          where: { email: user.email }
-        })
-        
-        if (!existingUser) {
-          // 新規ユーザーの場合、無料プランを設定
-          await prisma.user.create({
-            data: {
-              email: user.email!,
-              name: user.name,
-              image: user.image,
-              subscription: {
-                create: {
-                  plan: "free",
-                  status: "active"
+        try {
+          const existingUser = await prisma.user.findUnique({
+            where: { email: user.email }
+          })
+          
+          if (!existingUser) {
+            // 新規ユーザーの場合、無料プランを設定
+            await prisma.user.create({
+              data: {
+                email: user.email,
+                name: user.name || null,
+                image: user.image || null,
+                subscription: {
+                  create: {
+                    plan: "free",
+                    status: "active"
+                  }
                 }
               }
-            }
-          })
+            })
+          }
+        } catch (error) {
+          console.error('SignIn error:', error)
+          return false
         }
       }
       return true
