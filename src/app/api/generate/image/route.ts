@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+// 一時的にNextAuthを無効化
+// import { getServerSession } from 'next-auth'
+// import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { 
   generateImageWithDALLE, 
@@ -10,11 +11,15 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    // 一時的に認証をスキップ
+    // const session = await getServerSession(authOptions)
     
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // if (!session?.user?.id) {
+    //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // }
+
+    // ダミーユーザーIDを使用
+    const userId = 'temp-user-id'
 
     const { prompt, provider = 'mock' } = await request.json()
 
@@ -22,101 +27,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
     }
 
-    // ユーザーのサブスクリプションと使用状況をチェック
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: {
-        subscription: true,
-        generations: {
-          where: {
-            type: 'image',
-            createdAt: {
-              gte: new Date(new Date().setDate(new Date().getDate() - 30))
-            }
-          }
-        }
-      }
-    })
-
-    if (!user?.subscription) {
-      return NextResponse.json({ error: 'No subscription found' }, { status: 403 })
-    }
-
-    // 使用制限チェック
-    const monthlyGenerations = user.generations.length
-    const isFreePlan = user.subscription.plan === 'free'
-    const freeLimit = 2
-
-    if (isFreePlan && monthlyGenerations >= freeLimit) {
-      return NextResponse.json({ 
-        error: 'Monthly limit reached. Please upgrade to continue generating images.',
-        limit: freeLimit,
-        used: monthlyGenerations 
-      }, { status: 403 })
-    }
-
-    // 生成記録を作成
-    const generation = await prisma.generation.create({
-      data: {
-        userId: session.user.id,
-        type: 'image',
-        prompt,
-        status: 'pending'
-      }
-    })
-
-    // AI画像生成
-    let result
+    // 一時的にユーザーチェックを無効化してモック応答を返す
     try {
-      switch (provider) {
-        case 'dalle':
-          result = await generateImageWithDALLE({ prompt })
-          break
-        case 'stability':
-          result = await generateImageWithStability({ prompt })
-          break
-        default:
-          result = await generateMockImage({ prompt })
-      }
+      // AI画像生成（モックのみ）
+      const result = await generateMockImage({ prompt })
 
       if (!result.success) {
-        await prisma.generation.update({
-          where: { id: generation.id },
-          data: { status: 'failed' }
-        })
         return NextResponse.json({ error: result.error }, { status: 500 })
       }
-
-      // 生成成功時の更新
-      await prisma.generation.update({
-        where: { id: generation.id },
-        data: {
-          status: 'completed',
-          result: result.data?.url
-        }
-      })
 
       return NextResponse.json({
         success: true,
         data: {
-          id: generation.id,
+          id: 'temp-generation-id',
           url: result.data?.url,
           prompt,
-          createdAt: generation.createdAt
+          createdAt: new Date().toISOString()
         },
         usage: {
-          used: monthlyGenerations + 1,
-          limit: isFreePlan ? freeLimit : null,
-          plan: user.subscription.plan
+          used: 1,
+          limit: 2,
+          plan: 'free'
         }
       })
 
     } catch (error) {
-      await prisma.generation.update({
-        where: { id: generation.id },
-        data: { status: 'failed' }
-      })
-      throw error
+      console.error('Mock image generation error:', error)
+      return NextResponse.json({ error: 'Image generation failed' }, { status: 500 })
     }
 
   } catch (error) {
@@ -127,3 +64,7 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+// 動的ルート設定
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
